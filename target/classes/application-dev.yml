@@ -1,0 +1,47 @@
+spring:
+  # Development Database Configuration
+  datasource:
+    url: jdbc:mysql://localhost:3306/gitlab_metrics_dev?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+  
+  # JPA Configuration for Development
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+  
+  # Redis Configuration for Development
+  redis:
+    host: localhost
+    port: 6379
+    database: 1
+  
+  # RabbitMQ Configuration for Development
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: admin
+    password: admin
+
+# Logging Configuration for Development
+logging:
+  level:
+    com.gitlab.metrics: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# Development specific settings
+gitlab:
+  webhook:
+    secret: dev-webhook-secret
+  api:
+    rate-limit:
+      enabled: false

@@ -1,0 +1,61 @@
+spring:
+  # Production Database Configuration
+  datasource:
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      idle-timeout: 600000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+  
+  # JPA Configuration for Production
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        use_sql_comments: false
+        jdbc:
+          batch_size: 50
+  
+  # Redis Configuration for Production
+  redis:
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 2
+  
+  # RabbitMQ Configuration for Production
+  rabbitmq:
+    listener:
+      simple:
+        concurrency: 10
+        max-concurrency: 20
+
+# Logging Configuration for Production
+logging:
+  level:
+    com.gitlab.metrics: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+  file:
+    name: logs/gitlab-metrics.log
+    max-size: 100MB
+    max-history: 30
+
+# Production specific settings
+gitlab:
+  api:
+    rate-limit:
+      enabled: true
+      requests-per-minute: 500
+
+# Cache Configuration for Production
+cache:
+  redis:
+    default-ttl: 7200
+    metrics-ttl: 3600

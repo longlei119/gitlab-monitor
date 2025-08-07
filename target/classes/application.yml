@@ -1,0 +1,153 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+spring:
+  application:
+    name: gitlab-metrics-backend
+  
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  
+  # Database Configuration
+  datasource:
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/gitlab_metrics?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+    username: ${DATABASE_USERNAME:root}
+    password: ${DATABASE_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  
+  # Redis Configuration
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DATABASE:0}
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+  
+  # RabbitMQ Configuration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    connection-timeout: 15000
+    listener:
+      simple:
+        acknowledge-mode: manual
+        concurrency: 5
+        max-concurrency: 10
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+          max-interval: 10000
+          multiplier: 2
+  
+  # Jackson Configuration
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    com.gitlab.metrics: ${LOG_LEVEL:INFO}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:WARN}
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${SQL_PARAM_LOG_LEVEL:WARN}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Application Specific Configuration
+gitlab:
+  webhook:
+    secret: ${GITLAB_WEBHOOK_SECRET:your-webhook-secret}
+    timeout: 5000
+  api:
+    rate-limit:
+      enabled: true
+      requests-per-minute: 1000
+
+# SonarQube Configuration
+sonarqube:
+  url: ${SONARQUBE_URL:http://localhost:9000}
+  token: ${SONARQUBE_TOKEN:}
+  timeout: 30000
+  analysis:
+    enabled: ${SONARQUBE_ANALYSIS_ENABLED:true}
+    trigger-on-commit: true
+    quality-gate-timeout: 300000  # 5 minutes
+  projects:
+    default-branch: main
+  
+# Cache Configuration
+cache:
+  redis:
+    default-ttl: 3600
+    metrics-ttl: 1800
+
+# Bug Fix Efficiency Configuration
+bug:
+  fix:
+    timeout:
+      critical: ${BUG_FIX_TIMEOUT_CRITICAL:4}    # Critical bugs should be fixed within 4 hours
+      high: ${BUG_FIX_TIMEOUT_HIGH:24}           # High priority bugs within 24 hours
+      medium: ${BUG_FIX_TIMEOUT_MEDIUM:72}       # Medium priority bugs within 72 hours (3 days)
+      low: ${BUG_FIX_TIMEOUT_LOW:168}            # Low priority bugs within 168 hours (7 days)
+  response:
+    timeout:
+      critical: ${BUG_RESPONSE_TIMEOUT_CRITICAL:1}  # Critical bugs should be responded within 1 hour
+      high: ${BUG_RESPONSE_TIMEOUT_HIGH:4}          # High priority bugs within 4 hours
+      medium: ${BUG_RESPONSE_TIMEOUT_MEDIUM:8}      # Medium priority bugs within 8 hours
+      low: ${BUG_RESPONSE_TIMEOUT_LOW:24}           # Low priority bugs within 24 hours
