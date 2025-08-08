@@ -1,0 +1,178 @@
+{
+  "rabbit_version": "3.11.0",
+  "rabbitmq_version": "3.11.0",
+  "product_name": "RabbitMQ",
+  "product_version": "3.11.0",
+  "users": [
+    {
+      "name": "admin",
+      "password_hash": "admin123",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": "administrator"
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "admin",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "topic_permissions": [],
+  "parameters": [],
+  "global_parameters": [
+    {
+      "name": "cluster_name",
+      "value": "gitlab-metrics-cluster"
+    }
+  ],
+  "policies": [
+    {
+      "vhost": "/",
+      "name": "ha-all",
+      "pattern": ".*",
+      "apply-to": "all",
+      "definition": {
+        "ha-mode": "all",
+        "ha-sync-mode": "automatic"
+      },
+      "priority": 0
+    }
+  ],
+  "queues": [
+    {
+      "name": "commit.analysis.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-max-length": 10000
+      }
+    },
+    {
+      "name": "sonarqube.analysis.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-max-length": 5000
+      }
+    },
+    {
+      "name": "test.coverage.analysis.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-max-length": 5000
+      }
+    },
+    {
+      "name": "merge.request.analysis.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-max-length": 5000
+      }
+    },
+    {
+      "name": "issue.analysis.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-max-length": 5000
+      }
+    },
+    {
+      "name": "dead.letter.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "gitlab.events.exchange",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "dead.letter.exchange",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "gitlab.events.exchange",
+      "vhost": "/",
+      "destination": "commit.analysis.queue",
+      "destination_type": "queue",
+      "routing_key": "commit.push",
+      "arguments": {}
+    },
+    {
+      "source": "gitlab.events.exchange",
+      "vhost": "/",
+      "destination": "sonarqube.analysis.queue",
+      "destination_type": "queue",
+      "routing_key": "quality.analysis",
+      "arguments": {}
+    },
+    {
+      "source": "gitlab.events.exchange",
+      "vhost": "/",
+      "destination": "test.coverage.analysis.queue",
+      "destination_type": "queue",
+      "routing_key": "test.coverage",
+      "arguments": {}
+    },
+    {
+      "source": "gitlab.events.exchange",
+      "vhost": "/",
+      "destination": "merge.request.analysis.queue",
+      "destination_type": "queue",
+      "routing_key": "merge.request.*",
+      "arguments": {}
+    },
+    {
+      "source": "gitlab.events.exchange",
+      "vhost": "/",
+      "destination": "issue.analysis.queue",
+      "destination_type": "queue",
+      "routing_key": "issue.*",
+      "arguments": {}
+    },
+    {
+      "source": "dead.letter.exchange",
+      "vhost": "/",
+      "destination": "dead.letter.queue",
+      "destination_type": "queue",
+      "routing_key": "dead.letter",
+      "arguments": {}
+    }
+  ]
+}

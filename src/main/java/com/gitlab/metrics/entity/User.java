@@ -1,5 +1,7 @@
 package com.gitlab.metrics.entity;
 
+import com.gitlab.metrics.converter.EncryptedStringConverter;
+
 import javax.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -22,7 +24,8 @@ public class User {
     @Column(nullable = false)
     private String password;
     
-    @Column(length = 100)
+    @Column(length = 500) // 增加长度以容纳加密数据
+    @Convert(converter = EncryptedStringConverter.class)
     private String email;
     
     @Column(length = 100)
@@ -52,7 +55,8 @@ public class User {
     @Column
     private LocalDateTime lastLoginAt;
     
-    @Column
+    @Column(length = 200) // 增加长度以容纳加密数据
+    @Convert(converter = EncryptedStringConverter.class)
     private String lastLoginIp;
     
     @PrePersist

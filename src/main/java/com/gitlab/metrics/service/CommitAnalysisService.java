@@ -8,9 +8,12 @@ import com.gitlab.metrics.repository.FileChangeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import javax.persistence.EntityManager;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -45,8 +48,15 @@ public class CommitAnalysisService {
     @Autowired
     private SonarQubeAnalysisService sonarQubeAnalysisService;
     
+    @Autowired
+    private EntityManager entityManager;
+    
+    @Autowired
+    private BatchProcessingService batchProcessingService;
+    
     /**
-     * 处理push事件，分析并保存提交数据
+     * 处理push事件，分析并保存提交数据（优化版本）
+     * 使用批量处理和异步操作提高性能
      * 
      * @param pushEvent GitLab push事件数据
      * @return 处理的提交数量
@@ -64,33 +74,35 @@ public class CommitAnalysisService {
         String branch = extractBranchFromRef(pushEvent.getRef());
         String projectId = String.valueOf(pushEvent.getProjectId());
         
-        int processedCount = 0;
+        // 批量处理提交数据
+        List<Commit> commitsToSave = new ArrayList<>();
+        List<FileChange> fileChangesToSave = new ArrayList<>();
         Set<String> processedCommitShas = new HashSet<>();
+        
+        // 批量检查已存在的提交
+        Set<String> existingCommitShas = batchCheckExistingCommits(
+            pushEvent.getCommits().stream()
+                .map(PushEventRequest.CommitInfo::getId)
+                .collect(java.util.stream.Collectors.toList())
+        );
         
         for (PushEventRequest.CommitInfo commitInfo : pushEvent.getCommits()) {
             try {
                 // 避免重复处理相同的提交
-                if (processedCommitShas.contains(commitInfo.getId())) {
-                    logger.debug("Skipping duplicate commit: {}", commitInfo.getId());
-                    continue;
-                }
-                
-                // 检查数据库中是否已存在该提交
-                if (commitRepository.findByCommitSha(commitInfo.getId()).isPresent()) {
-                    logger.debug("Commit already exists in database: {}", commitInfo.getId());
-                    processedCommitShas.add(commitInfo.getId());
+                if (processedCommitShas.contains(commitInfo.getId()) || 
+                    existingCommitShas.contains(commitInfo.getId())) {
+                    logger.debug("Skipping duplicate or existing commit: {}", commitInfo.getId());
                     continue;
                 }
                 
                 Commit commit = processCommitInfo(commitInfo, projectId, branch, pushEvent);
                 if (commit != null) {
-                    commitRepository.save(commit);
-                    processedCount++;
+                    commitsToSave.add(commit);
+                    fileChangesToSave.addAll(commit.getFileChanges());
                     processedCommitShas.add(commitInfo.getId());
-                    logger.debug("Processed commit: {} by {}", commit.getCommitSha(), commit.getDeveloperName());
                     
-                    // 触发代码质量分析（异步）
-                    triggerQualityAnalysis(projectId, commitInfo.getId(), pushEvent);
+                    // 异步触发代码质量分析
+                    triggerQualityAnalysisAsync(projectId, commitInfo.getId(), pushEvent);
                 }
                 
             } catch (Exception e) {
@@ -99,8 +111,91 @@ public class CommitAnalysisService {
             }
         }
         
-        logger.info("Successfully processed {} commits from push event", processedCount);
-        return processedCount;
+        // 批量保存提交数据
+        if (!commitsToSave.isEmpty()) {
+            try {
+                batchProcessingService.batchSaveCommits(commitsToSave);
+                logger.info("Successfully queued {} commits for batch processing", commitsToSave.size());
+            } catch (Exception e) {
+                logger.error("Failed to batch save commits", e);
+                // 降级到单个保存
+                fallbackToIndividualSave(commitsToSave);
+            }
+        }
+        
+        logger.info("Successfully processed {} commits from push event", commitsToSave.size());
+        return commitsToSave.size();
+    }
+    
+    /**
+     * 批量检查已存在的提交
+     * 
+     * @param commitShas 提交SHA列表
+     * @return 已存在的提交SHA集合
+     */
+    private Set<String> batchCheckExistingCommits(List<String> commitShas) {
+        if (commitShas.isEmpty()) {
+            return new HashSet<>();
+        }
+        
+        try {
+            // 使用IN查询批量检查
+            String jpql = "SELECT c.commitSha FROM Commit c WHERE c.commitSha IN :commitShas";
+            List<String> existingCommits = entityManager.createQuery(jpql, String.class)
+                .setParameter("commitShas", commitShas)
+                .getResultList();
+            
+            return new HashSet<>(existingCommits);
+        } catch (Exception e) {
+            logger.warn("Failed to batch check existing commits, falling back to individual checks", e);
+            return new HashSet<>();
+        }
+    }
+    
+    /**
+     * 降级到单个保存（当批量保存失败时）
+     * 
+     * @param commits 提交列表
+     */
+    private void fallbackToIndividualSave(List<Commit> commits) {
+        logger.info("Falling back to individual save for {} commits", commits.size());
+        
+        int savedCount = 0;
+        for (Commit commit : commits) {
+            try {
+                commitRepository.save(commit);
+                savedCount++;
+            } catch (Exception e) {
+                logger.error("Failed to save individual commit: {}", commit.getCommitSha(), e);
+            }
+        }
+        
+        logger.info("Individual save completed, saved {} out of {} commits", savedCount, commits.size());
+    }
+    
+    /**
+     * 异步触发代码质量分析
+     * 
+     * @param projectId 项目ID
+     * @param commitSha 提交SHA
+     * @param pushEvent push事件数据
+     */
+    @Async("taskExecutor")
+    private void triggerQualityAnalysisAsync(String projectId, String commitSha, PushEventRequest pushEvent) {
+        try {
+            // 构建SonarQube项目键，通常使用项目路径或名称
+            String sonarProjectKey = generateSonarProjectKey(pushEvent);
+            
+            logger.debug("Triggering async quality analysis for project: {}, commit: {}, sonar key: {}", 
+                        projectId, commitSha, sonarProjectKey);
+            
+            // 异步触发质量分析
+            sonarQubeAnalysisService.triggerQualityAnalysis(projectId, commitSha, sonarProjectKey);
+            
+        } catch (Exception e) {
+            logger.error("Failed to trigger async quality analysis for commit: {}", commitSha, e);
+            // 不抛出异常，避免影响主要的提交处理流程
+        }
     }
     
     /**

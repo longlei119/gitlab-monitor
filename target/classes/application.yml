@@ -20,11 +20,18 @@ spring:
     password: ${DATABASE_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
-      idle-timeout: 300000
-      connection-timeout: 20000
-      max-lifetime: 1200000
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:20}
+      minimum-idle: ${HIKARI_MIN_IDLE:5}
+      idle-timeout: ${HIKARI_IDLE_TIMEOUT:300000}
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:20000}
+      max-lifetime: ${HIKARI_MAX_LIFETIME:1200000}
+      leak-detection-threshold: ${HIKARI_LEAK_DETECTION:60000}
+      # Performance optimizations
+      auto-commit: false
+      connection-test-query: SELECT 1
+      validation-timeout: 5000
+      # Connection pool name for monitoring
+      pool-name: GitLabMetricsCP
   
   # JPA Configuration
   jpa:
@@ -36,10 +43,28 @@ spring:
         dialect: org.hibernate.dialect.MySQL8Dialect
         format_sql: true
         use_sql_comments: true
+        # Performance optimizations
         jdbc:
-          batch_size: 20
+          batch_size: ${HIBERNATE_BATCH_SIZE:50}
+          batch_versioned_data: true
+          fetch_size: ${HIBERNATE_FETCH_SIZE:100}
         order_inserts: true
         order_updates: true
+        # Second level cache
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+        # Connection handling
+        connection:
+          provider_disables_autocommit: true
+        # Query optimization
+        query:
+          plan_cache_max_size: 2048
+          plan_parameter_metadata_max_size: 128
+        # Statistics
+        generate_statistics: ${HIBERNATE_STATISTICS:false}
   
   # Redis Configuration
   redis:
@@ -89,14 +114,61 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,env,configprops,beans,threaddump,heapdump
+      base-path: /actuator
+      cors:
+        allowed-origins: "*"
+        allowed-methods: GET,POST
   endpoint:
     health:
       show-details: when-authorized
+      show-components: always
+      probes:
+        enabled: true
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    env:
+      show-values: when-authorized
+  health:
+    circuitbreakers:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 10MB
+    redis:
+      enabled: true
+    db:
+      enabled: true
+    rabbit:
+      enabled: true
   metrics:
     export:
       prometheus:
         enabled: true
+        descriptions: true
+        step: 30s
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        webhook.processing.duration: true
+        commits.analysis.duration: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+        webhook.processing.duration: 0.5,0.95,0.99
+    tags:
+      application: gitlab-metrics-backend
+      environment: ${spring.profiles.active}
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
 
 # Logging Configuration
 logging:
@@ -151,3 +223,27 @@ bug:
       high: ${BUG_RESPONSE_TIMEOUT_HIGH:4}          # High priority bugs within 4 hours
       medium: ${BUG_RESPONSE_TIMEOUT_MEDIUM:8}      # Medium priority bugs within 8 hours
       low: ${BUG_RESPONSE_TIMEOUT_LOW:24}           # Low priority bugs within 24 hours
+
+# Application Security Configuration
+app:
+  security:
+    # AES加密密钥 (开发环境使用默认值，生产环境必须从环境变量获取)
+    encryption:
+      key: ${ENCRYPTION_KEY:C3NEaGvIp3yEOXOcAQKkVtkColxn0o3DCjSCG3go5Hs=}
+    # JWT配置
+    jwt:
+      secret: ${JWT_SECRET:mySecretKey}
+      expiration: 86400000 # 24小时
+    # CORS配置
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: "*"
+      allow-credentials: true
+  # Performance Configuration
+  performance:
+    batch-size: ${BATCH_SIZE:1000}
+    async-core-pool-size: ${ASYNC_CORE_POOL_SIZE:5}
+    async-max-pool-size: ${ASYNC_MAX_POOL_SIZE:20}
+    async-queue-capacity: ${ASYNC_QUEUE_CAPACITY:100}
+    query-timeout: ${QUERY_TIMEOUT:30}

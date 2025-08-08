@@ -217,11 +217,15 @@ public class DashboardService {
         }
         
         // 获取Bug统计
-        List<Issue> bugs = issueRepository.findBugsByProjectAndDateRange(projectId, startDate, endDate);
+        List<Issue> bugs = issueRepository.findByProjectIdAndCreatedAtBetween(projectId, startDate, endDate);
+        // 过滤出Bug类型的Issue
+        bugs = bugs.stream()
+            .filter(issue -> "bug".equals(issue.getIssueType()))
+            .collect(Collectors.toList());
         trends.setTotalBugs(bugs.size());
         
         List<Issue> fixedBugs = bugs.stream()
-            .filter(bug -> "closed".equals(bug.getState()))
+            .filter(bug -> "closed".equals(bug.getStatus()))
             .collect(Collectors.toList());
         trends.setFixedBugs(fixedBugs.size());
         
